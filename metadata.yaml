@@ -1,10 +1,38 @@
 name: astrbot_plugin_instagram_monitor
+display_name: Instagram 动态监控插件
+short_desc: 监控 Instagram 账号动态，支持多账号订阅、代理、媒体推送与命令管理
+desc: |
+  Instagram 动态监控插件，支持多账号订阅、代理、媒体推送与命令管理。
+  
+  ## 功能特性
+  - ✅ **多账号监控**：同时监控多个 Instagram 账号动态
+  - ✅ **订阅管理**：通过指令灵活订阅/取消订阅
+  - ✅ **代理支持**：支持 HTTP/HTTPS/SOCKS5 代理
+  - ✅ **媒体推送**：自动下载并推送图片、视频、多图
+  - ✅ **模板定制**：可自定义推送消息模板
+  - ✅ **智能去重**：游标机制避免重复推送
+  - ✅ **错误处理**：账号不可访问、限流等异常通知
+  - ✅ **免打扰**：支持自定义免打扰时间段
+  - ✅ **命令管理**：支持群聊/私聊指令，管理员权限控制
+  
+  ## 使用方法
+  1. 将插件放入 AstrBot 的 `data/plugins` 目录
+  2. 配置代理（可选）
+  3. 在 AstrBot 管理后台启用插件
+  4. 使用 `/ig sub <username>` 指令开始监控
+  
+  ## 依赖
+  - instaloader>=4.14,<5
+  - httpx[socks]>=0.27,<1
+  - pydantic>=2.0,<3
 version: 1.0.0
-description: Instagram 动态监控插件，支持多账号订阅、代理、媒体推送与命令管理
 author: YourName
-homepage: https://github.com/yourname/astrbot_plugin_instagram_monitor
-license: MIT
-astrbot_version: ^2.0.0
+repo: https://github.com/yourname/astrbot_plugin_instagram_monitor
+astrbot_version: ">=2.0.0"
+support_platforms:
+  - aiocqhttp
+  - qq_official
+social_link: https://github.com/yourname
 tags:
   - instagram
   - monitoring
@@ -14,6 +42,7 @@ tags:
   - onebot
   - instaloader
   - async
+license: MIT
 permissions:
   - message
   - message.group
