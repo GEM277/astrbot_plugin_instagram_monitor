@@ -8,36 +8,24 @@ import logging
 from datetime import datetime
 from pathlib import Path
 
-from astrbot.api.event import MessageChain
-from astrbot.api.plugin import filter
-from astrbot.core.utils.astrbot_path import get_astrbot_data_path
-from filter.permission_type import PermissionType
+from astrbot.api import logger
+from astrbot.api.event import MessageChain, filter
+from astrbot.api.star import Context, Star
 
 from .client import InstagramClient, PrivateProfileError
 from .formatter import MessageFormatter
 from .media import MediaDownloader
-from .models import DEFAULT_USER_AGENT
+from .models import DEFAULT_USER_AGENT, Post
 from .state import StateStore
 
-logger = logging.getLogger("astrbot_plugin_instagram_monitor")
 
-
-class InstagramMonitor:
+class InstagramMonitor(Star):
     """Instagram 动态监控插件。"""
 
-    # 插件元数据
-    name = "astrbot_plugin_instagram_monitor"
-    version = "1.0.0"
-    author = "YourName"
-    description = "Instagram 动态监控插件，支持多账号订阅、代理、媒体推送与命令管理"
-
-    def __init__(self, context, config: dict = None):
-        super().__init__(context, config)
+    def __init__(self, context: Context):
+        super().__init__(context)
         # 数据目录
-        try:
-            self.data_root = Path(get_astrbot_data_path()) / "plugin_data" / self.name
-        except Exception:
-            self.data_root = Path("data") / "plugin_data" / self.name
+        self.data_root = Path(context.get_data_path()) / "astrbot_plugin_instagram_monitor"
         self.data_root.mkdir(parents=True, exist_ok=True)
         # 初始化组件
         self.state = StateStore(self.data_root / "state.json")
@@ -52,7 +40,7 @@ class InstagramMonitor:
         self.formatter = MessageFormatter(
             template=self._get_config("push.message_template", ""),
             caption_limit=self._get_config("push.caption_limit", 300),
-            tz=self.context.timezone,
+            tz=context.get_timezone(),
         )
         self.media = MediaDownloader(
             cache_dir=self.data_root / "media",
@@ -70,7 +58,8 @@ class InstagramMonitor:
     def _get_config(self, path: str, default=None):
         """嵌套获取配置值，支持点号路径。"""
         keys = path.split(".")
-        value = self.config or {}
+        config = self.context.get_config() or {}
+        value = config
         for key in keys:
             if isinstance(value, dict) and key in value:
                 value = value[key]
@@ -112,7 +101,7 @@ class InstagramMonitor:
 
     async def _check_all_profiles(self):
         """检查所有订阅账号是否有新动态。"""
-        now = datetime.now(self.context.timezone)
+        now = datetime.now(self.context.get_timezone())
         quiet_hours = self._get_config("notify.quiet_hours", [])
         if self._is_quiet_hours(now, quiet_hours):
             return
@@ -164,37 +153,35 @@ class InstagramMonitor:
                 return
             message = self.formatter.format(post)
             # 构建消息链
-            chain = MessageChain(chain=[])
-            chain.message(message)
+            chain = MessageChain().message(message)
             for media in downloaded:
                 if media.is_video:
                     chain.video(media.path)
                 else:
                     chain.image(media.path)
             # 推送
-            await self._send_message(profile, chain)
+            self._send_message(profile, chain)
             # 清理
             self.media.cleanup_post(post.shortcode)
         except Exception as e:
             logger.error("处理帖子 %s 失败：%s", post.shortcode, e, exc_info=True)
             if self._get_config("notify.error_message", True):
-                await self._send_error_message(profile, f"帖子处理失败：{e}")
+                self._send_error_message(profile, f"帖子处理失败：{e}")
 
-    async def _send_message(self, profile: str, chain: MessageChain):
+    def _send_message(self, profile: str, chain: MessageChain):
         """发送消息到订阅会话。"""
         umos = self.state.get_umos(profile)
         for umo in umos:
             try:
-                await self.context.send_message(umo, chain)
+                self.context.send_message(umo, chain)
             except Exception as e:
                 logger.error("发送消息到会话 %s 失败：%s", umo, e, exc_info=True)
 
-    async def _send_error_message(self, profile: str, error: str):
+    def _send_error_message(self, profile: str, error: str):
         """发送错误消息到订阅会话。"""
         message = f"⚠️ Instagram 监控错误（账号：{profile}）\n{error}"
-        chain = MessageChain(chain=[])
-        chain.message(message)
-        await self._send_message(profile, chain)
+        chain = MessageChain().message(message)
+        self._send_message(profile, chain)
 
     # ---- 指令处理 ----
 
@@ -202,67 +189,57 @@ class InstagramMonitor:
     def ig(self):
         """Instagram 动态监控指令组。"""
 
-    @filter.permission_type(PermissionType.ADMIN)
     @ig.command("sub")
-    async def ig_sub(self, ctx, username: str = ""):
+    async def ig_sub(self, event, username: str = ""):
         """订阅指定账号动态。"""
         username = username.strip().lstrip("@")
         if not username:
-            return MessageChain(chain=[]).message(
-                "请提供 Instagram 用户名，例如：/ig sub instagram"
-            )
+            yield event.plain_result("请提供 Instagram 用户名，例如：/ig sub instagram")
+            return
         try:
             if not self.client.profile_exists(username):
-                return MessageChain(chain=[]).message(
-                    f"账号 @{username} 不存在或不可访问"
-                )
+                yield event.plain_result(f"账号 @{username} 不存在或不可访问")
+                return
         except PrivateProfileError:
-            return MessageChain(chain=[]).message(
-                f"账号 @{username} 是私密账号，无法监控"
-            )
-        if self.state.subscribe(username, ctx.session_id):
-            return MessageChain(chain=[]).message(f"✅ 已订阅 @{username} 的新动态")
+            yield event.plain_result(f"账号 @{username} 是私密账号，无法监控")
+            return
+        if self.state.subscribe(username, event.unified_msg_origin):
+            yield event.plain_result(f"✅ 已订阅 @{username} 的新动态")
         else:
-            return MessageChain(chain=[]).message(
-                f"ℹ️ 你已订阅 @{username}，无需重复订阅"
-            )
+            yield event.plain_result(f"ℹ️ 你已订阅 @{username}，无需重复订阅")
 
-    @filter.permission_type(PermissionType.ADMIN)
     @ig.command("unsub")
-    async def ig_unsub(self, ctx, username: str = ""):
+    async def ig_unsub(self, event, username: str = ""):
         """取消订阅指定账号动态。"""
         username = username.strip().lstrip("@")
         if not username:
-            return MessageChain(chain=[]).message(
-                "请提供 Instagram 用户名，例如：/ig unsub instagram"
-            )
-        if self.state.unsubscribe(username, ctx.session_id):
-            return MessageChain(chain=[]).message(f"✅ 已取消订阅 @{username}")
+            yield event.plain_result("请提供 Instagram 用户名，例如：/ig unsub instagram")
+            return
+        if self.state.unsubscribe(username, event.unified_msg_origin):
+            yield event.plain_result(f"✅ 已取消订阅 @{username}")
         else:
-            return MessageChain(chain=[]).message(f"ℹ️ 你未订阅 @{username}")
+            yield event.plain_result(f"ℹ️ 你未订阅 @{username}")
 
-    @filter.permission_type(PermissionType.ADMIN)
     @ig.command("list")
-    async def ig_list(self, ctx):
+    async def ig_list(self, event):
         """查看当前订阅的账号列表。"""
         profiles = self.state.get_profiles()
         if not profiles:
-            return MessageChain(chain=[]).message("📋 当前没有订阅任何 Instagram 账号")
+            yield event.plain_result("📋 当前没有订阅任何 Instagram 账号")
+            return
         message = "📋 订阅的 Instagram 账号：\n"
         for profile in profiles:
             umos = self.state.get_umos(profile)
             message += f"- @{profile}（{len(umos)} 个会话）\n"
-        return MessageChain(chain=[]).message(message.strip())
+        yield event.plain_result(message.strip())
 
-    @filter.permission_type(PermissionType.ADMIN)
     @ig.command("check")
-    async def ig_check(self, ctx, username: str = ""):
+    async def ig_check(self, event, username: str = ""):
         """检查账号状态。"""
         username = username.strip().lstrip("@")
         if not username:
-            return MessageChain(chain=[]).message(
-                "请提供 Instagram 用户名，例如：/ig check instagram"
-            )
+            yield event.plain_result("请提供 Instagram 用户名，例如：/ig check instagram")
+            return
         try:
             exists = self.client.profile_exists(username)
             last_seen, last_seen_ts = self.state.get_cursor(username)
@@ -273,24 +250,21 @@ class InstagramMonitor:
             message = f"📊 账号 @{username} 状态：\n"
             message += f"- 状态：{'✅ 正常' if exists else '❌ 不可访问'}\n"
             message += f"- 最后推送：{time_str}"
-            return MessageChain(chain=[]).message(message)
+            yield event.plain_result(message)
         except Exception as e:
-            return MessageChain(chain=[]).message(f"❌ 检查失败：{e}")
+            yield event.plain_result(f"❌ 检查失败：{e}")
 
     @ig.command("umo")
-    async def ig_umo(self, ctx):
+    async def ig_umo(self, event):
         """查看自己订阅的账号列表。"""
         profiles = []
         for profile in self.state.get_profiles():
-            if ctx.session_id in self.state.get_umos(profile):
+            if event.unified_msg_origin in self.state.get_umos(profile):
                 profiles.append(profile)
         if not profiles:
-            return MessageChain(chain=[]).message("📋 你没有订阅任何 Instagram 账号")
+            yield event.plain_result("📋 你没有订阅任何 Instagram 账号")
+            return
         message = "📋 你订阅的 Instagram 账号：\n"
         for profile in profiles:
             message += f"- @{profile}\n"
-        return MessageChain(chain=[]).message(message.strip())
-
-
-# 注册插件
-register = InstagramMonitor
+        yield event.plain_result(message.strip())
