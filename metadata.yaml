@@ -1,0 +1,23 @@
+name: astrbot_plugin_instagram_monitor
+version: 1.0.0
+description: Instagram 动态监控插件，支持多账号订阅、代理、媒体推送与命令管理
+author: YourName
+homepage: https://github.com/yourname/astrbot_plugin_instagram_monitor
+license: MIT
+astrbot_version: ^2.0.0
+tags:
+  - instagram
+  - monitoring
+  - media
+  - subscription
+  - qq
+  - onebot
+  - instaloader
+  - async
+permissions:
+  - message
+  - message.group
+  - message.private
+  - logger
+  - data
+  - config

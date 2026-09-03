@@ -1,0 +1,184 @@
+{
+  "type": "object",
+  "properties": {
+    "accounts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string",
+            "description": "Instagram 用户名",
+            "hint": "例如：instagram",
+            "obvious_hint": true
+          },
+          "push_to_groups": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "description": "推送目标群号"
+            },
+            "default": [],
+            "hint": "留空则推送到所有订阅会话"
+          },
+          "push_to_users": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "description": "推送目标用户号"
+            },
+            "default": [],
+            "hint": "留空则推送到所有订阅会话"
+          },
+          "enable_push": {
+            "type": "boolean",
+            "default": true,
+            "description": "是否推送该账号的新动态"
+          }
+        },
+        "required": ["username"]
+      },
+      "default": [],
+      "description": "要监控的 Instagram 账号列表"
+    },
+    "schedule": {
+      "type": "object",
+      "properties": {
+        "poll_interval_minutes": {
+          "type": "integer",
+          "default": 15,
+          "minimum": 1,
+          "maximum": 60,
+          "description": "轮询间隔（分钟）",
+          "hint": "1~60 分钟，建议 15~30"
+        },
+        "first_check_delay_seconds": {
+          "type": "integer",
+          "default": 30,
+          "minimum": 10,
+          "maximum": 300,
+          "description": "首次启动延迟检查（秒）",
+          "hint": "避免启动时立即轮询，建议 30~60"
+        }
+      },
+      "default": {}
+    },
+    "push": {
+      "type": "object",
+      "properties": {
+        "message_template": {
+          "type": "text",
+          "default": "📸 Instagram 新动态\n👤 {name}\n📝 {caption}\n🔗 {link}\n🕒 {date}",
+          "description": "推送消息模板（支持 {name}/{caption}/{link}/{date}/{type} 占位符）",
+          "hint": "文案过长会自动截断，空文案显示“（无文案）”
+        },
+        "caption_limit": {
+          "type": "integer",
+          "default": 300,
+          "minimum": 50,
+          "maximum": 1000,
+          "description": "文案最大长度（超出截断）",
+          "hint": "建议 200~400"
+        },
+        "push_video": {
+          "type": "boolean",
+          "default": true,
+          "description": "是否推送视频（QQ 官方客户端不支持视频）"
+        },
+        "max_images_per_post": {
+          "type": "integer",
+          "default": 9,
+          "minimum": 1,
+          "maximum": 20,
+          "description": "单帖最多推送图片数（多图帖）",
+          "hint": "QQ 单条消息限制 9 张图片，但可多消息发送"
+        },
+        "max_video_size_mb": {
+          "type": "integer",
+          "default": 100,
+          "minimum": 10,
+          "maximum": 500,
+          "description": "视频大小上限（MB）",
+          "hint": "QQ 单条消息限制 20MB，建议 50~100"
+        },
+        "request_timeout": {
+          "type": "number",
+          "default": 120,
+          "minimum": 10,
+          "maximum": 300,
+          "description": "媒体下载超时（秒）",
+          "hint": "网络慢时可适当延长，建议 60~120"
+        },
+        "retention_minutes": {
+          "type": "integer",
+          "default": 60,
+          "minimum": 10,
+          "maximum": 1440,
+          "description": "媒体文件保留时间（分钟）",
+          "hint": "推送完成后立即清理，此为兜底时间"
+        }
+      },
+      "default": {}
+    },
+    "notify": {
+      "type": "object",
+      "properties": {
+        "error_message": {
+          "type": "boolean",
+          "default": true,
+          "description": "是否推送错误消息（如账号不可访问、限流等）"
+        },
+        "quiet_hours": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "start": {
+                "type": "string",
+                "description": "开始时间（HH:mm）",
+                "hint": "24 小时制，例如：22:00"
+              },
+              "end": {
+                "type": "string",
+                "description": "结束时间（HH:mm）",
+                "hint": "24 小时制，例如：08:00"
+              }
+            },
+            "required": ["start", "end"]
+          },
+          "default": [],
+          "description": "免打扰时间段（跨天如 22:00~08:00）"
+        }
+      },
+      "default": {}
+    },
+    "instagram": {
+      "type": "object",
+      "properties": {
+        "username": {
+          "type": "string",
+          "description": "Instagram 登录账号（可选，用于访问私密账号、提升稳定性）",
+          "hint": "留空则匿名访问，私密账号无法监控"
+        },
+        "password": {
+          "type": "text",
+          "secret": true,
+          "description": "Instagram 登录密码",
+          "hint": "明文保存在本地，仅建议用于小号"
+        },
+        "proxy": {
+          "type": "string",
+          "description": "代理地址（可选）",
+          "hint": "例如：http://127.0.0.1:7890 或 socks5://127.0.0.1:1080"
+        },
+        "session_dir": {
+          "type": "string",
+          "description": "Session 文件目录（可选）",
+          "hint": "留空则使用插件数据目录"
+        }
+      },
+      "default": {}
+    }
+  },
+  "default": {}
+}
